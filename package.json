@@ -1,0 +1,27 @@
+{
+  "name": "kahamatic-pro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KahamaticPRO — Universal Adobe Premiere Pro CEP Extension with Native Apple Silicon Media Engine & Gemini AI",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "extract-templates": "python scripts/extract-templates.py",
+    "build": "vite build && node scripts/assemble-cep.mjs",
+    "test": "vitest run",
+    "deploy:mac": "npm run build && node scripts/deploy-mac.mjs"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.11"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.14.0",
+    "svelte": "^5.28.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0",
+    "vite": "^6.2.0"
+  }
+}

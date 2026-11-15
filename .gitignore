@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-cep/
+.vite/
+*.zxp
+*.p12
+*.zip
+.DS_Store
+Thumbs.db
+.env
+*.log
+cep/bin/
