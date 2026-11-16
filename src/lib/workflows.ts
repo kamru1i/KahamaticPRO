@@ -380,11 +380,15 @@ export async function runInsertKineticTextWorkflow(params: {
   try {
     if (textConfig.positionMode === "auto" && ctx.inTicks && ctx.outTicks) {
       onProgress(20, "Capturing frame for collision-free placement...");
-      const midTicks = ((BigInt(ctx.inTicks) + BigInt(ctx.outTicks)) / 2n).toString();
-      const base = path.join(os.tmpdir(), `kahamatic_frame_${Date.now()}`);
-      const exported = await callHostFn<string>("exportFrameAtTicks", midTicks, base, ctx.sequenceId);
-      if (exported && fs.existsSync(exported)) {
-        framePngPath = exported;
+      try {
+        const midTicks = ((BigInt(ctx.inTicks) + BigInt(ctx.outTicks)) / 2n).toString();
+        const base = path.join(os.tmpdir(), `kahamatic_frame_${Date.now()}`);
+        const exported = await callHostFn<string>("exportFrameAtTicks", midTicks, base, ctx.sequenceId);
+        if (exported && fs.existsSync(exported)) {
+          framePngPath = exported;
+        }
+      } catch {
+        framePngPath = null;
       }
     }
 

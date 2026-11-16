@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import templatesData from "../cep/templates/premiere_templates.json";
+import { resolveCepSystemPath } from "../src/lib/cep-node";
 import { buildTextFlatBuffer, bytesToBase64, hexToBytes } from "../src/lib/flatbuffer-text";
 import { extractGeminiText } from "../src/lib/gemini";
 import {
@@ -399,5 +400,12 @@ describe("6. Gemini model migration & thought-part extraction", () => {
     expect(normalizeGeminiModel("gemini-2.0-flash")).toBe("gemini-4-hydrogen");
     expect(normalizeGeminiModel("gemini-3.8-flash")).toBe("gemini-3.8-flash");
     expect(normalizeGeminiModel("gemini-4-carbon")).toBe("gemini-4-carbon");
+  });
+
+  it("decodes file:// CEP getSystemPath URIs into native OS filesystem paths", () => {
+    expect(
+      resolveCepSystemPath("file:///Users/kamrul/Library/Application%20Support/Adobe/CEP/extensions/com.kahamatic.pro")
+    ).toBe("/Users/kamrul/Library/Application Support/Adobe/CEP/extensions/com.kahamatic.pro");
+    expect(resolveCepSystemPath("file:///D:/Web%20Dev/KahamaticPRO/")).toBe("D:/Web Dev/KahamaticPRO");
   });
 });

@@ -37,10 +37,34 @@ export function nodeRequire<T = any>(mod: string): T {
   throw new Error(`Node module '${cleanMod}' requested outside CEP/Node environment`);
 }
 
-export function getExtensionRoot(): string {
+export function resolveCepSystemPath(rawPath: string): string {
+  const trimmed = (rawPath || "").trim();
+  if (!trimmed) return process.cwd();
+  let decoded = trimmed;
+  if (/^file:\/\//i.test(decoded)) {
+    decoded = decoded.replace(/^file:\/\//i, "");
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      // keep raw if malformed percent sequence
+    }
+    if (/^\/[A-Za-z]:\//.test(decoded)) {
+      decoded = decoded.slice(1);
+    }
+  }
+  if (decoded.length > 1) {
+    decoded = decoded.replace(/[\\/]+$/, "");
+  }
+  if (decoded.startsWith("/") || /^[A-Za-z]:[\\/]/.test(decoded)) {
+    return decoded;
+  }
   const path = nodeRequire<typeof import("node:path")>("path");
+  return path.resolve(decoded);
+}
+
+export function getExtensionRoot(): string {
   if (typeof window !== "undefined" && window.__adobe_cep__) {
-    return path.resolve(window.__adobe_cep__.getSystemPath("extension"));
+    return resolveCepSystemPath(window.__adobe_cep__.getSystemPath("extension"));
   }
   return process.cwd();
 }
@@ -73,13 +97,15 @@ export function evalJsx(script: string): Promise<string> {
   });
 }
 
+let hostJsxBootstrapped = false;
+
 async function ensureHostScriptLoaded(forceReload = false): Promise<void> {
-  if (!forceReload) {
+  if (!forceReload && hostJsxBootstrapped) {
     try {
       const kind = await evalJsx("typeof $._Kahamatic");
       if (kind.trim() === "object") return;
     } catch {
-      // Fall through and explicitly load hostscript.jsx
+      // Fall through and explicitly reload hostscript.jsx
     }
   }
   const path = nodeRequire<typeof import("node:path")>("path");
@@ -88,6 +114,7 @@ async function ensureHostScriptLoaded(forceReload = false): Promise<void> {
   if (loadedKind.trim() !== "object") {
     throw new Error(`Failed to initialize ExtendScript bridge at ${jsxPath}`);
   }
+  hostJsxBootstrapped = true;
 }
 
 export async function callHostFn<T = any>(fnName: string, ...args: unknown[]): Promise<T> {

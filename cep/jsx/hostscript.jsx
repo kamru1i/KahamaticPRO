@@ -113,7 +113,7 @@ if (typeof $._Kahamatic === "undefined") {
     return off;
   }
 
-  ns.getProjectContext = function () {
+  ns.getProjectContext = function (lightweight) {
     try {
       var proj = app.project;
       if (!proj || !proj.path) {
@@ -130,24 +130,25 @@ if (typeof $._Kahamatic === "undefined") {
       var fps = Math.round(ticksPerSec / frameTicks);
       if (fps <= 0) fps = 30;
 
-      var inTicksRaw = String(seq.getInPointAsTicks());
-      var outTicksRaw = String(seq.getOutPointAsTicks());
-      var inTicksNum = parseFloat(inTicksRaw);
-      var outTicksNum = parseFloat(outTicksRaw);
-      var hasIO = !isNaN(inTicksNum) && !isNaN(outTicksNum) && inTicksNum >= 0 && outTicksNum > inTicksNum;
+      var inTimeObj = seq.getInPointAsTime ? seq.getInPointAsTime() : null;
+      var outTimeObj = seq.getOutPointAsTime ? seq.getOutPointAsTime() : null;
+      var inSecVal = inTimeObj ? Number(inTimeObj.seconds) : parseFloat(String(seq.getInPoint()));
+      var outSecVal = outTimeObj ? Number(outTimeObj.seconds) : parseFloat(String(seq.getOutPoint()));
+      var hasIO = isFinite(inSecVal) && isFinite(outSecVal) && inSecVal >= 0 && outSecVal > inSecVal;
 
-      var inTicks = hasIO ? inTicksRaw : null;
-      var outTicks = hasIO ? outTicksRaw : null;
-      var inSecNum = hasIO ? (inTicksNum / ticksPerSec) : null;
-      var outSecNum = hasIO ? (outTicksNum / ticksPerSec) : null;
+      var inTicks = hasIO ? (inTimeObj ? String(inTimeObj.ticks) : String(Math.round(inSecVal * ticksPerSec))) : null;
+      var outTicks = hasIO ? (outTimeObj ? String(outTimeObj.ticks) : String(Math.round(outSecVal * ticksPerSec))) : null;
+      var inSecNum = hasIO ? inSecVal : null;
+      var outSecNum = hasIO ? outSecVal : null;
 
       var pos = seq.getPlayerPosition();
       var playheadTicks = pos ? String(pos.ticks) : "0";
       var playheadSec = pos ? Number(pos.seconds) : 0;
 
       var v1 = seq.videoTracks.numTracks > 0 ? seq.videoTracks[0] : null;
+      var v1ClipCount = v1 ? Number(v1.clips.numItems) : 0;
       var v1Clips = [];
-      if (v1) {
+      if (v1 && !lightweight) {
         for (var i = 0; i < v1.clips.numItems; i++) {
           var c = v1.clips[i];
           var mp = "";
@@ -195,6 +196,7 @@ if (typeof $._Kahamatic === "undefined") {
         playheadSec: playheadSec,
         videoTrackCount: Number(seq.videoTracks.numTracks),
         audioTrackCount: Number(seq.audioTracks.numTracks),
+        v1ClipCount: v1ClipCount,
         v1Clips: v1Clips
       });
     } catch (e) {
@@ -206,8 +208,8 @@ if (typeof $._Kahamatic === "undefined") {
     try {
       var proj = expectedPath ? findProjectByPath(expectedPath) : app.project;
       if (!proj) return "ERROR: Target project is not open.";
-      var ok = proj.save();
-      return kmJsonVal({ ok: Boolean(ok), path: String(proj.path) });
+      proj.save();
+      return kmJsonVal({ ok: true, path: String(proj.path) });
     } catch (e) {
       return "ERROR: saveCurrentProject failed: " + e.toString();
     }
@@ -237,9 +239,11 @@ if (typeof $._Kahamatic === "undefined") {
       var qeseq = qe.project.getActiveSequence();
       if (!qeseq) return "ERROR: QE active sequence unavailable.";
       var tc = qeseq.CTI.timecode;
-      var ok = qeseq.exportFramePNG(tc, String(outBaseNoExt));
-      if (!ok) return "ERROR: exportFramePNG failed at " + tc;
-      return kmJsonStr(String(outBaseNoExt) + ".png");
+      qeseq.exportFramePNG(tc, String(outBaseNoExt));
+      $.sleep(80);
+      var outPng = new File(String(outBaseNoExt) + ".png");
+      if (!outPng.exists) return "ERROR: exportFramePNG did not produce PNG at " + tc;
+      return kmJsonStr(String(outPng.fsName));
     } catch (e) {
       return "ERROR: exportFrameAtTicks failed: " + e.toString();
     }
@@ -331,10 +335,7 @@ if (typeof $._Kahamatic === "undefined") {
       var oldSeq = oldProj ? findSequenceById(oldProj, seqId) : null;
       var baselineOffline = oldSeq ? countOfflineClips(oldSeq) : 0;
 
-      var opened = app.openDocument(String(stagingPath), 1, 1, 1);
-      if (!opened) {
-        return "ERROR: app.openDocument failed for staging project.";
-      }
+      app.openDocument(String(stagingPath), 1, 1, 1);
 
       var stagingProj = findProjectByPath(stagingPath);
       if (!stagingProj) {
@@ -371,7 +372,7 @@ if (typeof $._Kahamatic === "undefined") {
       }
 
       var savedAs = stagingProj.saveAs(String(origPath));
-      if (!savedAs) {
+      if (savedAs === false && String(stagingProj.path) !== String(origPath)) {
         return "ERROR: saveAs failed onto " + origPath;
       }
 

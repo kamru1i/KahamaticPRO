@@ -77,6 +77,32 @@ function main() {
     ].join(" && "),
   ]);
 
+  // Reload open KahamaticPRO CEP panel automatically via DevTools port 8947 if running
+  const reloadPy = [
+    "import json, urllib.request, socket, base64, struct",
+    "try:",
+    "    pages = json.loads(urllib.request.urlopen('http://127.0.0.1:8947/json', timeout=1).read().decode())",
+    "    for p in pages:",
+    "        if 'com.kahamatic.pro' in p.get('url', '') and p.get('webSocketDebuggerUrl'):",
+    "            path = '/' + p['webSocketDebuggerUrl'].split('/', 3)[3]",
+    "            s = socket.create_connection(('127.0.0.1', 8947), timeout=2)",
+    "            k = base64.b64encode(b'kahamatic-reload').decode()",
+    "            s.sendall(f'GET {path} HTTP/1.1\\r\\nHost: 127.0.0.1:8947\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Key: {k}\\r\\nSec-WebSocket-Version: 13\\r\\n\\r\\n'.encode())",
+    "            buf = b''",
+    "            while b'\\r\\n\\r\\n' not in buf: buf += s.recv(1024)",
+    "            data = json.dumps({'id': 1, 'method': 'Page.reload', 'params': {'ignoreCache': True}}).encode()",
+    "            mask = b'\\x12\\x34\\x56\\x78'",
+    "            masked = bytes(b ^ mask[i % 4] for i, b in enumerate(data))",
+    "            n = len(data)",
+    "            hdr = bytearray([0x81, 0x80 | (n if n < 126 else 126)]) + (b'' if n < 126 else struct.pack('!H', n))",
+    "            s.sendall(bytes(hdr) + mask + masked)",
+    "            print('Reloaded live KahamaticPRO panel via CDP port 8947.')",
+    "            break",
+    "except Exception:",
+    "    pass",
+  ].join("\n");
+  spawnSync("ssh", [MAC_HOST, "python3 -"], { input: reloadPy, stdio: ["pipe", "inherit", "inherit"] });
+
   console.log("Deployed KahamaticPRO to Mac successfully! Re-open Window > Extensions > KahamaticPRO in Premiere Pro.");
 }
 

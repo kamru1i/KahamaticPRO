@@ -96,6 +96,7 @@ export interface ProjectContext {
   playheadSec: number;
   videoTrackCount: number;
   audioTrackCount: number;
+  v1ClipCount?: number;
   v1Clips: V1ClipInfo[];
 }
 

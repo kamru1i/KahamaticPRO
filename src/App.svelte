@@ -93,14 +93,21 @@
     statusMsg = msg;
   }
 
-  async function refreshContext(silent = false) {
+  async function refreshContext(silent = false, lightweight = false) {
     if (!isCepEnvironment()) {
       if (!silent) pushLog("Open KahamaticPRO inside Adobe Premiere Pro to read the active sequence.");
       return;
     }
     try {
       const prevSeqId = ctx?.sequenceId || null;
-      const next = await callHostFn<ProjectContext>("getProjectContext");
+      if (lightweight && ctx) {
+        const lite = await callHostFn<ProjectContext>("getProjectContext", true);
+        if (lite && lite.ok && lite.sequenceId === ctx.sequenceId && lite.v1ClipCount === ctx.v1Clips.length) {
+          ctx = { ...lite, v1Clips: ctx.v1Clips };
+          return;
+        }
+      }
+      const next = await callHostFn<ProjectContext>("getProjectContext", false);
       if (!next || !next.ok) {
         if (ctx !== null) {
           ctx = null;
@@ -119,7 +126,12 @@
       }
     } catch (e: any) {
       ctx = null;
-      if (!silent) pushLog(`Context error: ${e?.message || e}`, true);
+      const errTxt = e?.message || String(e);
+      if (!silent) {
+        pushLog(`Context error: ${errTxt}`, true);
+      } else if (statusMsg.startsWith("Connecting")) {
+        statusMsg = `Bridge error: ${errTxt}`;
+      }
     }
   }
 
@@ -356,12 +368,12 @@
       return cleanupKeys;
     }
     const onFocus = () => {
-      if (!busy) refreshContext(true);
+      if (!busy) refreshContext(true, true);
     };
     window.addEventListener("focus", onFocus);
     const timer = window.setInterval(() => {
       if (!busy && !document.hidden) {
-        refreshContext(true);
+        refreshContext(true, true);
       }
     }, 1800);
     return () => {
