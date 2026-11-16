@@ -214,6 +214,46 @@ describe("3. prproj-xml camera Hermite keyframes, crop-safety & reset", () => {
     expect(okReset).toBe(true);
     expect(() => doc.validateIntegrity()).not.toThrow();
   });
+
+  it("clamps base-framed 121% off-center clips inside the base visible sub-rectangle without AE.ADBE Crop", () => {
+    const baseScale = 121;
+    const basePos: [number, number] = [0.49947917461395264, 0.4583333432674408];
+    const sBase = baseScale / 100;
+    const u0c = 0.5 - basePos[0] / sBase;
+    const u1c = 0.5 + (1 - basePos[0]) / sBase;
+    const v0c = 0.5 - basePos[1] / sBase;
+    const v1c = 0.5 + (1 - basePos[1]) / sBase;
+
+    const kfs = build8StepHermiteCameraKfs({
+      segments: [
+        { tlFrame: 0, useClipBase: true },
+        { tlFrame: 12, scale: 146, posX: 0.99, posY: 0.99 },
+        { tlFrame: 30, scale: 146, posX: 0.01, posY: 0.01 },
+        { tlFrame: 42, useClipBase: true },
+      ],
+      tlStartTicks: 0n,
+      vcInTicks: 0n,
+      vcOutTicks: 90n * FRAME_TICKS_30,
+      frameTicks: FRAME_TICKS_30,
+      baseScale,
+      basePos,
+      anchor: [0.5, 0.5],
+      cropPct: { left: 0, top: 0, right: 0, bottom: 0 },
+    });
+
+    const scaleTokens = kfs.scaleKf.split(";").filter(Boolean);
+    const posTokens = kfs.posKf.split(";").filter(Boolean);
+    expect(scaleTokens.length).toBe(posTokens.length);
+
+    for (let i = 0; i < scaleTokens.length; i++) {
+      const sc = parseFloat(scaleTokens[i].split(",")[1]) / 100;
+      const [px, py] = posTokens[i].split(",")[1].split(":").map(Number);
+      expect(px + sc * (u0c - 0.5)).toBeLessThanOrEqual(1e-7);
+      expect(px + sc * (u1c - 0.5)).toBeGreaterThanOrEqual(1 - 1e-7);
+      expect(py + sc * (v0c - 0.5)).toBeLessThanOrEqual(1e-7);
+      expect(py + sc * (v1c - 0.5)).toBeGreaterThanOrEqual(1 - 1e-7);
+    }
+  });
 });
 
 describe("4. colorizer, smart badge, cut plan coalescing & semver", () => {

@@ -942,14 +942,22 @@ export function build8StepHermiteCameraKfs(params: {
     return src;
   };
 
+  const sBase = Math.max(1.0, baseScale / 100.0);
+  const effectiveCropPct = {
+    left: Math.max(cropPct.left, (anchor[0] - basePos[0] / sBase) * 100),
+    top: Math.max(cropPct.top, (anchor[1] - basePos[1] / sBase) * 100),
+    right: Math.max(cropPct.right, (1 - (anchor[0] + (1 - basePos[0]) / sBase)) * 100),
+    bottom: Math.max(cropPct.bottom, (1 - (anchor[1] + (1 - basePos[1]) / sBase)) * 100),
+  };
+
   const resolveScalePos = (s: CameraSegmentSpec): { scale: number; pos: [number, number] } => {
     if (s.useClipBase) {
       return { scale: baseScale, pos: basePos };
     }
-    const sc = s.scale ?? baseScale;
+    const sc = Math.max(baseScale, s.scale ?? baseScale);
     const rawX = s.posX ?? basePos[0];
     const rawY = s.posY ?? basePos[1];
-    return { scale: sc, pos: clampCameraPos(rawX, rawY, sc, anchor[0], anchor[1], cropPct) };
+    return { scale: sc, pos: clampCameraPos(rawX, rawY, sc, anchor[0], anchor[1], effectiveCropPct) };
   };
 
   const ptsS: Array<[bigint, number]> = [];
