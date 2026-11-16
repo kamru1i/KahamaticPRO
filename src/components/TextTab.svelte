@@ -278,7 +278,7 @@
 
   <button
     type="button"
-    disabled={busy || !ctx || !hasValidIo || !phraseText.trim()}
+    disabled={busy}
     onclick={() => onInsertText(phraseText)}
     class="w-full rounded-lg bg-amber-500 px-3 py-2.5 text-xs font-bold text-zinc-950 shadow transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
   >

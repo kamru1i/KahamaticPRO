@@ -130,12 +130,16 @@ if (typeof $._Kahamatic === "undefined") {
       var fps = Math.round(ticksPerSec / frameTicks);
       if (fps <= 0) fps = 30;
 
-      var inSecRaw = seq.getInPoint();
-      var outSecRaw = seq.getOutPoint();
-      var hasIO = inSecRaw >= 0 && outSecRaw > inSecRaw;
+      var inTicksRaw = String(seq.getInPointAsTicks());
+      var outTicksRaw = String(seq.getOutPointAsTicks());
+      var inTicksNum = parseFloat(inTicksRaw);
+      var outTicksNum = parseFloat(outTicksRaw);
+      var hasIO = !isNaN(inTicksNum) && !isNaN(outTicksNum) && inTicksNum >= 0 && outTicksNum > inTicksNum;
 
-      var inTicks = hasIO ? String(seq.getInPointAsTicks()) : null;
-      var outTicks = hasIO ? String(seq.getOutPointAsTicks()) : null;
+      var inTicks = hasIO ? inTicksRaw : null;
+      var outTicks = hasIO ? outTicksRaw : null;
+      var inSecNum = hasIO ? (inTicksNum / ticksPerSec) : null;
+      var outSecNum = hasIO ? (outTicksNum / ticksPerSec) : null;
 
       var pos = seq.getPlayerPosition();
       var playheadTicks = pos ? String(pos.ticks) : "0";
@@ -185,8 +189,8 @@ if (typeof $._Kahamatic === "undefined") {
         seqEndTicks: seqEndTicks,
         inTicks: inTicks,
         outTicks: outTicks,
-        inSec: hasIO ? Number(inSecRaw) : null,
-        outSec: hasIO ? Number(outSecRaw) : null,
+        inSec: inSecNum,
+        outSec: outSecNum,
         playheadTicks: playheadTicks,
         playheadSec: playheadSec,
         videoTrackCount: Number(seq.videoTracks.numTracks),
@@ -253,7 +257,7 @@ if (typeof $._Kahamatic === "undefined") {
       proj.openSequence(seq.sequenceID);
       app.enableQE();
       var qeseq = qe.project.getActiveSequence();
-      if (!qeseq || String(qeseq.guid) !== String(plan.sequenceId)) {
+      if (!qeseq || String(qeseq.guid).replace(/[{}]/g, "").toLowerCase() !== String(plan.sequenceId).replace(/[{}]/g, "").toLowerCase()) {
         return "ERROR: QE sequence mismatch.";
       }
 

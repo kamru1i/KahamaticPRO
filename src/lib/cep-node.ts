@@ -73,22 +73,51 @@ export function evalJsx(script: string): Promise<string> {
   });
 }
 
-export function callHostFn<T = any>(fnName: string, ...args: unknown[]): Promise<T> {
+async function ensureHostScriptLoaded(forceReload = false): Promise<void> {
+  if (!forceReload) {
+    try {
+      const kind = await evalJsx("typeof $._Kahamatic");
+      if (kind.trim() === "object") return;
+    } catch {
+      // Fall through and explicitly load hostscript.jsx
+    }
+  }
+  const path = nodeRequire<typeof import("node:path")>("path");
+  const jsxPath = path.join(getExtensionRoot(), "jsx", "hostscript.jsx").replace(/\\/g, "/");
+  const loadedKind = await evalJsx(`$.evalFile(${JSON.stringify(jsxPath)}); typeof $._Kahamatic;`);
+  if (loadedKind.trim() !== "object") {
+    throw new Error(`Failed to initialize ExtendScript bridge at ${jsxPath}`);
+  }
+}
+
+export async function callHostFn<T = any>(fnName: string, ...args: unknown[]): Promise<T> {
   const serialized = args.map((a) => JSON.stringify(a)).join(", ");
   const code = `$._Kahamatic.${fnName}(${serialized})`;
-  return evalJsx(code).then((raw) => {
-    if (!raw) {
-      throw new Error(`Host function $._Kahamatic.${fnName} returned empty output`);
+  await ensureHostScriptLoaded(false);
+
+  let raw: string;
+  try {
+    raw = await evalJsx(code);
+  } catch (err: any) {
+    if (String(err?.message || err).includes("EvalScript error")) {
+      await ensureHostScriptLoaded(true);
+      raw = await evalJsx(code);
+    } else {
+      throw err;
     }
-    if (raw.startsWith("ERROR:")) {
-      throw new Error(raw.slice(6).trim());
-    }
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return raw as unknown as T;
-    }
-  });
+  }
+
+  if (!raw) {
+    throw new Error(`Host function $._Kahamatic.${fnName} returned empty output`);
+  }
+  if (raw.startsWith("ERROR:")) {
+    throw new Error(raw.slice(6).trim());
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return raw as unknown as T;
+  }
 }
 
 export function spawnHelper<T = any>(

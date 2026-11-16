@@ -156,7 +156,10 @@
     </div>
     <button
       type="button"
-      onclick={onClose}
+      onclick={() => {
+        persistDraft();
+        onClose();
+      }}
       class="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-200 hover:bg-zinc-700"
     >
       Back
@@ -238,6 +241,7 @@
       <select
         id="gemini-model-select"
         bind:value={geminiModel}
+        onchange={() => persistDraft()}
         class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500"
       >
         {#each modelOptions as m (m.id)}

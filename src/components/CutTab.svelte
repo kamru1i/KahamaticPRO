@@ -21,7 +21,7 @@
   let { ctx, cutConfig, settings, busy, onChangeConfig, onOpenSettings, onRunCut }: Props = $props();
 
   let needsApiKey = $derived(cutConfig.mode === "ai" && !settings.geminiApiKey.trim());
-  let canRun = $derived(Boolean(ctx && ctx.v1Clips.length > 0 && !busy && !needsApiKey));
+  let missingV1 = $derived(Boolean(ctx && ctx.v1Clips.length === 0));
 
   function update(patch: Partial<CutPresetConfig>) {
     onChangeConfig({ ...cutConfig, ...patch });
@@ -212,9 +212,15 @@
     />
   </label>
 
+  {#if missingV1}
+    <div class="rounded-lg border border-zinc-700 bg-zinc-900/70 px-2.5 py-1.5 text-[11px] text-zinc-300">
+      Place your main video clip on Video Track 1 (<code class="text-amber-300">V1</code>) of the timeline.
+    </div>
+  {/if}
+
   <button
     type="button"
-    disabled={!canRun}
+    disabled={busy}
     onclick={onRunCut}
     class="w-full rounded-lg bg-amber-500 px-3 py-2.5 text-xs font-bold text-zinc-950 shadow transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
   >

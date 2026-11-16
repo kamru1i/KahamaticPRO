@@ -2,7 +2,7 @@
 <ExtensionList>
   <Extension Id="com.kahamatic.pro.panel">
     <HostList>
-      <Host Name="PPRO" Port="8892"/>
+      <Host Name="PPRO" Port="8947"/>
     </HostList>
   </Extension>
 </ExtensionList>

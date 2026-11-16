@@ -263,7 +263,7 @@
     {#if subMode === "manual"}
       <button
         type="button"
-        disabled={busy || !ctx || !hasValidIo}
+        disabled={busy}
         onclick={() =>
           onRunManualZoom(
             targetNormX,
@@ -280,7 +280,7 @@
     {:else}
       <button
         type="button"
-        disabled={busy || !ctx || ctx.v1Clips.length === 0}
+        disabled={busy}
         onclick={onRunAutoCamera}
         class="flex-1 rounded-lg bg-amber-500 px-3 py-2.5 text-xs font-bold text-zinc-950 shadow transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
@@ -290,7 +290,7 @@
 
     <button
       type="button"
-      disabled={busy || !ctx}
+      disabled={busy}
       onclick={onResetClip}
       title="Reset Motion Scale & Position at current playhead clip"
       class="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 disabled:opacity-40"

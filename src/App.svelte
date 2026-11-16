@@ -99,15 +99,23 @@
       return;
     }
     try {
+      const prevSeqId = ctx?.sequenceId || null;
       const next = await callHostFn<ProjectContext>("getProjectContext");
       if (!next || !next.ok) {
-        ctx = null;
+        if (ctx !== null) {
+          ctx = null;
+          if (silent && !busy) {
+            statusMsg = next?.error || "Open a saved Premiere project & sequence.";
+          }
+        }
         if (!silent) pushLog(next?.error || "No active Premiere sequence open.", true);
         return;
       }
       ctx = next;
       if (!silent) {
         statusMsg = `Synced: ${next.sequenceName} (${next.frameWidth}x${next.frameHeight})`;
+      } else if (prevSeqId !== next.sequenceId) {
+        statusMsg = `Active: ${next.sequenceName} (${next.v1Clips.length} V1 clip${next.v1Clips.length === 1 ? "" : "s"})`;
       }
     } catch (e: any) {
       ctx = null;
@@ -236,7 +244,11 @@
 
   async function onRunCut() {
     await withWorkflowLock("Starting Phase 1 cut pipeline...", async () => {
-      if (!ctx) throw new Error("No active Premiere sequence open.");
+      if (!ctx) throw new Error("No active Premiere sequence open. Open/click a sequence on the timeline first.");
+      if (workingPreset.cut.mode === "ai" && !settings.geminiApiKey.trim()) {
+        showSettings = true;
+        throw new Error("Please save your Gemini API Key in Settings first, or switch Mode to Silence Only.");
+      }
       const res = await runPhase1CutWorkflow({
         ctx,
         cutConfig: workingPreset.cut,
@@ -311,10 +323,10 @@
       return;
     }
     try {
-      const picked = await callHostFn<string>("pickBadgePngFile");
-      if (picked) {
-        handleSaveSettings({ ...settings, badgeImagePath: picked });
-        pushLog(`Badge PNG selected: ${picked.split("/").pop()}`);
+      const picked = await callHostFn<{ cancelled: boolean; path: string }>("pickBadgePngFile");
+      if (picked && !picked.cancelled && picked.path) {
+        handleSaveSettings({ ...settings, badgeImagePath: picked.path });
+        pushLog(`Badge PNG selected: ${picked.path.split(/[\\/]/).pop()}`);
       }
     } catch (e: any) {
       pushLog(`File picker error: ${e?.message || e}`, true);
@@ -340,7 +352,23 @@
     if (isCepEnvironment() && settings.githubRepo.trim()) {
       handleCheckUpdate(true);
     }
-    return cleanupKeys;
+    if (!isCepEnvironment()) {
+      return cleanupKeys;
+    }
+    const onFocus = () => {
+      if (!busy) refreshContext(true);
+    };
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => {
+      if (!busy && !document.hidden) {
+        refreshContext(true);
+      }
+    }, 1800);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+      cleanupKeys();
+    };
   });
 </script>
 
