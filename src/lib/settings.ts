@@ -109,9 +109,17 @@ export const BUILT_IN_PRESETS: PresetProfile[] = [
   },
 ];
 
+export function normalizeGeminiModel(model?: string): string {
+  const clean = (model || "").trim();
+  if (!clean || /^gemini-2\./i.test(clean)) {
+    return "gemini-4-hydrogen";
+  }
+  return clean;
+}
+
 export const DEFAULT_SETTINGS: KahamaticSettings = {
   geminiApiKey: "",
-  geminiModel: "gemini-2.5-flash",
+  geminiModel: "gemini-4-hydrogen",
   githubRepo: "",
   githubToken: "",
   activePresetId: BUILT_IN_PRESETS[0].id,
@@ -137,6 +145,7 @@ export function loadSettings(): KahamaticSettings {
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          geminiModel: normalizeGeminiModel(parsed.geminiModel),
           customPresets: Array.isArray(parsed.customPresets) ? parsed.customPresets : [],
         };
       }
@@ -151,6 +160,7 @@ export function loadSettings(): KahamaticSettings {
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          geminiModel: normalizeGeminiModel(parsed.geminiModel),
           customPresets: Array.isArray(parsed.customPresets) ? parsed.customPresets : [],
         };
       }

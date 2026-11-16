@@ -12,6 +12,12 @@
     font-size: 12px;
   }
 
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;

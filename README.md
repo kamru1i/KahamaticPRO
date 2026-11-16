@@ -11,7 +11,7 @@
    - Saves `<ProjectName>_<label>.prproj` in the exact same folder as your active project while keeping Premiere Pro on your working project.
 2. **Phase 1 Auto Cut (`Cut` tab)**
    - Runs Apple `vDSP_rmsqv` 10 ms RMS silence detection + micro-valley scanning directly on timeline V1 clips.
-   - **AI + Silence Mode**: Packs speech into compressed AAC `.m4a` batches and uses **Gemini** (`gemini-2.5-flash` / `gemini-2.5-pro`) to detect false starts, retakes, and filler segments (supports Bangla, Banglish, English, or Auto).
+   - **AI + Silence Mode**: Packs speech into compressed AAC `.m4a` batches and uses **Gemini** (`gemini-4-hydrogen` / `gemini-3.8-flash`) to detect false starts, retakes, and filler segments (supports Bangla, Banglish, English, or Auto).
    - Optionally color-codes V1 clips (`KEEP` = Green, `SILENCE` = Cyan, `BAD TAKE` = Red).
 3. **Kinetic Text on I/O (`Text I/O` tab)**
    - Mark **In (`I`)** and **Out (`O`)** on your sequence, type any Bangla or English phrase, and pick from **4 kinetic styles**:
@@ -57,7 +57,7 @@ This builds `dist-cep/`, streams it via `tar | ssh` to `~/Library/Application Su
 ## Settings & Gemini API Setup
 
 1. Open the **`⚙`** Settings drawer inside **KahamaticPRO**.
-2. Paste your **Gemini API Key** (`AIza...`), select `gemini-2.5-flash` (or `gemini-2.5-pro`), and click **Test**.
+2. Paste your **Gemini API Key** (`AIza...`), select `gemini-4-hydrogen` (or `gemini-3.8-flash`), and click **Test**.
 3. *(Optional)* Enter your **GitHub Repository** (`owner/KahamaticPRO`) and a token if the repo is private, then click **Save Settings**.
 
 ---

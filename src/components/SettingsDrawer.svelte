@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { testGeminiApiKey } from "../lib/gemini";
+  import { isCepEnvironment, readSystemClipboardText } from "../lib/cep-node";
+  import { listGeminiModels, testGeminiApiKey } from "../lib/gemini";
   import type { KahamaticSettings } from "../lib/types";
   import { getInstalledVersion, type UpdateCheckResult } from "../lib/updater";
 
@@ -29,8 +30,18 @@
     onLog,
   }: Props = $props();
 
+  const CURATED_MODELS: Array<{ id: string; label: string }> = [
+    { id: "gemini-4-hydrogen", label: "gemini-4-hydrogen (Latest, Recommended)" },
+    { id: "gemini-3.8-flash", label: "gemini-3.8-flash (Fast & Low Cost)" },
+    { id: "gemini-4-carbon", label: "gemini-4-carbon (Frontier Pro)" },
+    { id: "gemini-4-argon", label: "gemini-4-argon (Deep Reasoning)" },
+  ];
+
   let geminiApiKey = $state("");
-  let geminiModel = $state("gemini-2.5-flash");
+  let geminiModel = $state("gemini-4-hydrogen");
+  let fetchedModels = $state<string[]>([]);
+  let loadingModels = $state(false);
+  let customModelMode = $state(false);
   let githubRepo = $state("");
   let githubToken = $state("");
   let showKey = $state(false);
@@ -40,9 +51,20 @@
 
   const installedVersion = getInstalledVersion();
 
+  let modelOptions = $derived.by(() => {
+    const map = new Map<string, string>();
+    for (const m of CURATED_MODELS) map.set(m.id, m.label);
+    for (const id of fetchedModels) {
+      if (!map.has(id)) map.set(id, id);
+    }
+    const cur = geminiModel.trim();
+    if (cur && !map.has(cur)) map.set(cur, `${cur} (Custom)`);
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  });
+
   $effect(() => {
     geminiApiKey = settings.geminiApiKey;
-    geminiModel = settings.geminiModel || "gemini-2.5-flash";
+    geminiModel = settings.geminiModel || "gemini-4-hydrogen";
     githubRepo = settings.githubRepo;
     githubToken = settings.githubToken;
   });
@@ -51,7 +73,7 @@
     onSave({
       ...settings,
       geminiApiKey: geminiApiKey.trim(),
-      geminiModel: geminiModel.trim() || "gemini-2.5-flash",
+      geminiModel: geminiModel.trim() || "gemini-4-hydrogen",
       githubRepo: githubRepo.trim(),
       githubToken: githubToken.trim(),
     });
@@ -59,6 +81,49 @@
     setTimeout(() => {
       savedBanner = false;
     }, 1800);
+  }
+
+  async function handlePasteKey() {
+    try {
+      let clip = "";
+      if (isCepEnvironment()) {
+        clip = readSystemClipboardText();
+      } else if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+        clip = await navigator.clipboard.readText();
+      }
+      const clean = clip.trim();
+      if (!clean) {
+        keyStatus = { ok: false, msg: "Clipboard is empty." };
+        return;
+      }
+      geminiApiKey = clean;
+      keyStatus = null;
+    } catch (e: any) {
+      keyStatus = { ok: false, msg: `Clipboard read failed: ${e?.message || e}` };
+    }
+  }
+
+  async function handleLoadModels() {
+    if (!geminiApiKey.trim()) {
+      keyStatus = { ok: false, msg: "Enter your Gemini API Key first to load models." };
+      return;
+    }
+    loadingModels = true;
+    try {
+      const models = await listGeminiModels(geminiApiKey);
+      fetchedModels = models;
+      if (models.length > 0 && !models.includes(geminiModel)) {
+        geminiModel = models[0];
+      }
+      keyStatus = { ok: true, msg: `Loaded ${models.length} active Gemini model(s) for this key.` };
+      onLog(`Loaded ${models.length} Gemini model(s).`);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      keyStatus = { ok: false, msg };
+      onLog(`Failed to load Gemini models: ${msg}`, true);
+    } finally {
+      loadingModels = false;
+    }
   }
 
   async function handleTestGemini() {
@@ -106,7 +171,7 @@
     </div>
 
     <label class="mb-1 block text-[11px] text-zinc-400" for="gemini-key-input">Gemini API Key</label>
-    <div class="mb-2 flex gap-1.5">
+    <div class="mb-2 flex gap-1">
       <input
         id="gemini-key-input"
         type={showKey ? "text" : "password"}
@@ -114,6 +179,15 @@
         placeholder="AIza..."
         class="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 outline-none focus:border-amber-500"
       />
+      <button
+        type="button"
+        onclick={handlePasteKey}
+        disabled={testingKey || busy}
+        title="Paste API key from clipboard"
+        class="rounded border border-zinc-700 bg-zinc-800 px-2 text-[11px] text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+      >
+        Paste
+      </button>
       <button
         type="button"
         onclick={() => (showKey = !showKey)}
@@ -131,16 +205,46 @@
       </button>
     </div>
 
-    <label class="mb-1 block text-[11px] text-zinc-400" for="gemini-model-select">Model</label>
-    <select
-      id="gemini-model-select"
-      bind:value={geminiModel}
-      class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500"
-    >
-      <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Recommended)</option>
-      <option value="gemini-2.5-pro">gemini-2.5-pro (Higher Reasoning)</option>
-      <option value="gemini-2.0-flash">gemini-2.0-flash (Legacy Fast)</option>
-    </select>
+    <div class="mb-1 flex items-center justify-between gap-2">
+      <label class="text-[11px] text-zinc-400" for="gemini-model-select">Model</label>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          onclick={handleLoadModels}
+          disabled={loadingModels || testingKey || busy}
+          class="text-[10px] font-medium text-amber-400 hover:text-amber-300 disabled:opacity-45"
+        >
+          {loadingModels ? "Loading..." : "Load Models"}
+        </button>
+        <button
+          type="button"
+          onclick={() => (customModelMode = !customModelMode)}
+          class="text-[10px] text-zinc-400 hover:text-zinc-200"
+        >
+          {customModelMode ? "Use List" : "Custom ID"}
+        </button>
+      </div>
+    </div>
+
+    {#if customModelMode}
+      <input
+        id="gemini-model-select"
+        type="text"
+        bind:value={geminiModel}
+        placeholder="e.g. gemini-4-hydrogen"
+        class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 outline-none focus:border-amber-500"
+      />
+    {:else}
+      <select
+        id="gemini-model-select"
+        bind:value={geminiModel}
+        class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500"
+      >
+        {#each modelOptions as m (m.id)}
+          <option value={m.id}>{m.label}</option>
+        {/each}
+      </select>
+    {/if}
 
     {#if keyStatus}
       <div

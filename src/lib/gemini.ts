@@ -8,26 +8,51 @@ export interface GeminiSegmentDecision {
   reason?: string;
 }
 
-function postGeminiJson(
-  model: string,
+export function extractGeminiText(resp: any): string {
+  const parts = resp?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) return "";
+  const answer = parts
+    .filter((p: any) => !p?.thought && typeof p?.text === "string")
+    .map((p: any) => p.text)
+    .join("");
+  if (answer.trim()) return answer.trim();
+  const fallback = parts
+    .filter((p: any) => typeof p?.text === "string")
+    .map((p: any) => p.text)
+    .join("");
+  return fallback.trim();
+}
+
+function stripJsonFence(raw: string): string {
+  const t = raw.trim();
+  const m = t.match(/^```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?```$/i);
+  return m ? m[1].trim() : t;
+}
+
+function requestGeminiJson(
+  method: "GET" | "POST",
+  pathStr: string,
   apiKey: string,
-  bodyObj: unknown,
+  bodyObj?: unknown,
   timeoutMs = 120000
 ): Promise<any> {
   const https = nodeRequire<typeof import("node:https")>("https");
-  const cleanModel = (model || "gemini-2.5-flash").trim();
-  const payload = JSON.stringify(bodyObj);
+  const payload = bodyObj !== undefined ? JSON.stringify(bodyObj) : "";
+  const headers: Record<string, string | number> = {
+    "x-goog-api-key": apiKey.trim(),
+  };
+  if (method === "POST") {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = Buffer.byteLength(payload);
+  }
 
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
         hostname: "generativelanguage.googleapis.com",
-        path: `/v1beta/models/${encodeURIComponent(cleanModel)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(payload),
-        },
+        path: pathStr,
+        method,
+        headers,
         timeout: timeoutMs,
       },
       (res) => {
@@ -51,9 +76,27 @@ function postGeminiJson(
       req.destroy(new Error(`Gemini request timed out after ${timeoutMs}ms`));
     });
     req.on("error", reject);
-    req.write(payload);
+    if (method === "POST") {
+      req.write(payload);
+    }
     req.end();
   });
+}
+
+function postGeminiJson(
+  model: string,
+  apiKey: string,
+  bodyObj: unknown,
+  timeoutMs = 120000
+): Promise<any> {
+  const cleanModel = (model || "gemini-4-hydrogen").trim().replace(/^models\//, "");
+  return requestGeminiJson(
+    "POST",
+    `/v1beta/models/${encodeURIComponent(cleanModel)}:generateContent`,
+    apiKey,
+    bodyObj,
+    timeoutMs
+  );
 }
 
 async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
@@ -72,7 +115,35 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   throw lastErr;
 }
 
-export async function testGeminiApiKey(apiKey: string, model = "gemini-2.5-flash"): Promise<string> {
+export async function listGeminiModels(apiKey: string): Promise<string[]> {
+  if (!apiKey.trim()) {
+    throw new Error("Enter your Gemini API Key first.");
+  }
+  const resp = await requestGeminiJson("GET", "/v1beta/models?pageSize=100", apiKey, undefined, 20000);
+  const rawModels: any[] = Array.isArray(resp?.models) ? resp.models : [];
+  const ids = rawModels
+    .filter(
+      (m) =>
+        Array.isArray(m?.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes("generateContent")
+    )
+    .map((m) => String(m.name || "").replace(/^models\//, ""))
+    .filter((id) => id.startsWith("gemini-"));
+
+  const priority = ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-4-carbon", "gemini-4-argon"];
+  const unique = Array.from(new Set(ids));
+  unique.sort((a, b) => {
+    const ia = priority.indexOf(a);
+    const ib = priority.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return b.localeCompare(a);
+  });
+  return unique;
+}
+
+export async function testGeminiApiKey(apiKey: string, model = "gemini-4-hydrogen"): Promise<string> {
   if (!apiKey.trim()) {
     throw new Error("Gemini API Key is empty.");
   }
@@ -81,12 +152,11 @@ export async function testGeminiApiKey(apiKey: string, model = "gemini-2.5-flash
     apiKey,
     {
       contents: [{ role: "user", parts: [{ text: "Reply with exact word OK." }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 16 },
+      generationConfig: { temperature: 0 },
     },
     20000
   );
-  const txt = resp?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  return txt.trim() || "OK";
+  return extractGeminiText(resp) || "OK";
 }
 
 export async function classifyAudioPackWithGemini(params: {
@@ -149,7 +219,7 @@ export async function classifyAudioPackWithGemini(params: {
     })
   );
 
-  const rawText = resp?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  const rawText = stripJsonFence(extractGeminiText(resp)) || "{}";
   const parsed = JSON.parse(rawText);
   const decisions = Array.isArray(parsed?.decisions) ? parsed.decisions : [];
   return decisions.map((d: any) => ({

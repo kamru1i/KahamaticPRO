@@ -7,7 +7,7 @@
   import PresetBar from "./components/PresetBar.svelte";
   import SettingsDrawer from "./components/SettingsDrawer.svelte";
   import TextTab from "./components/TextTab.svelte";
-  import { callHostFn, isCepEnvironment, spawnHelper } from "./lib/cep-node";
+  import { callHostFn, installCepKeyboardShortcuts, isCepEnvironment, spawnHelper } from "./lib/cep-node";
   import {
     BUILT_IN_PRESETS,
     getAllPresets,
@@ -335,10 +335,12 @@
   }
 
   onMount(() => {
+    const cleanupKeys = installCepKeyboardShortcuts();
     refreshContext(true);
     if (isCepEnvironment() && settings.githubRepo.trim()) {
       handleCheckUpdate(true);
     }
+    return cleanupKeys;
   });
 </script>
 

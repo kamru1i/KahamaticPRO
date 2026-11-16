@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import templatesData from "../cep/templates/premiere_templates.json";
 import { buildTextFlatBuffer, bytesToBase64, hexToBytes } from "../src/lib/flatbuffer-text";
+import { extractGeminiText } from "../src/lib/gemini";
 import {
   build8StepHermiteCameraKfs,
   clampCameraPos,
@@ -14,6 +15,7 @@ import {
   resetClipCamera,
   TICKS_PER_SEC,
 } from "../src/lib/prproj-xml";
+import { normalizeGeminiModel } from "../src/lib/settings";
 import { compareSemver } from "../src/lib/updater";
 import { buildCutPlanFromAnalysis } from "../src/lib/workflows";
 
@@ -370,5 +372,32 @@ describe.runIf(fs.existsSync(REAL_BACKUP_XML_PATH))("5. Real M2-10_clean_backup.
 
     const integrity = doc.validateIntegrity();
     expect(integrity.topOidCount).toBeGreaterThan(100);
+  });
+});
+
+describe("6. Gemini model migration & thought-part extraction", () => {
+  it("skips thinking parts when extracting answer text from Gemini responses", () => {
+    const mockResp = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              { thought: true, text: "Internal chain of thought reasoning..." },
+              { text: '{"decisions":[{"seg_id":"SEG_1","decision":"KEEP"}]}' },
+            ],
+          },
+        },
+      ],
+    };
+    expect(extractGeminiText(mockResp)).toBe('{"decisions":[{"seg_id":"SEG_1","decision":"KEEP"}]}');
+  });
+
+  it("upgrades deprecated gemini-2.x models to gemini-4-hydrogen while keeping newer/custom models", () => {
+    expect(normalizeGeminiModel("")).toBe("gemini-4-hydrogen");
+    expect(normalizeGeminiModel(undefined)).toBe("gemini-4-hydrogen");
+    expect(normalizeGeminiModel("gemini-2.5-flash")).toBe("gemini-4-hydrogen");
+    expect(normalizeGeminiModel("gemini-2.0-flash")).toBe("gemini-4-hydrogen");
+    expect(normalizeGeminiModel("gemini-3.8-flash")).toBe("gemini-3.8-flash");
+    expect(normalizeGeminiModel("gemini-4-carbon")).toBe("gemini-4-carbon");
   });
 });
